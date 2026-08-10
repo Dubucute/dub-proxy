@@ -1,0 +1,5 @@
+services:
+  - type: web
+    name: dub-proxy
+    runtime: docker
+    plan: free
