@@ -1,11 +1,11 @@
 # dub-proxy — thin OpenAI-compatible proxy to opencode.ai
-# Direct first; on 429 only, rotate through IPVanish SOCKS5 proxies.
+# Direct first; on 429 or Cloudflare-HTML-403, rotate through IPVanish SOCKS5.
 # All models pass through verbatim. No context limits, no dashboard.
 """dub-proxy: OpenAI-SDK-backed proxy to opencode.ai free models.
 
 Design (per user requirement):
   - Direct connection to opencode.ai/zen/v1 first (fastest).
-  - On HTTP 429 (rate limit) ONLY, rotate through IPVanish SOCKS5 proxies.
+  - On HTTP 429 (rate limit) or a 403 HTML block page (Cloudflare), rotate.
   - Pass through ALL models verbatim. No context trimming, no curation.
   - Uses the OpenAI Python SDK to talk to upstream (streaming/SSE handled).
   - Thin FastAPI+uvicorn listener so clients get an OpenAI-compatible endpoint.
@@ -21,7 +21,7 @@ from openai import OpenAI, APIStatusError, APIConnectionError
 
 from config import (
     UPSTREAM_BASE, UPSTREAM_API_KEY, PROXIES, UA,
-    DIRECT_ORDER, PROXY_RETRY_STATUSES,
+    DIRECT_ORDER, PROXY_RETRY_STATUSES, RETRY_HTML_403,
 )
 
 log = logging.getLogger("dub-proxy")
@@ -109,12 +109,21 @@ def route_request(payload: dict, stream: bool):
 
         except APIStatusError as e:
             code = e.status_code
-            if code in PROXY_RETRY_STATUSES:
-                log.warning("route=%s HTTP %d -> rotating", label, code)
+            body_text = e.response.text or ""
+            # Retry on explicit 429 rate limits,
+            # OR on a 403 whose body is an HTML block page (Cloudflare 1010).
+            # A 403 with JSON body is a real API rejection -> return as-is.
+            is_block = (
+                RETRY_HTML_403 and code == 403 and
+                ("<html" in body_text.lower() or body_text.strip().startswith("<!DOCTYPE"))
+            )
+            if code in PROXY_RETRY_STATUSES or is_block:
+                log.warning("route=%s HTTP %d%s -> rotating", label, code,
+                            " (html block)" if is_block else "")
                 last_err = e
                 continue
             log.info("route=%s HTTP %d -> return as-is", label, code)
-            return {"route": label, "status": code, "body": e.response.text,
+            return {"route": label, "status": code, "body": body_text,
                     "err": e}
 
         except APIConnectionError as e:

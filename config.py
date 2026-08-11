@@ -15,8 +15,11 @@ UPSTREAM_API_KEY = "public"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
-# Only rotate on 429 (rate limit). Everything else is returned as-is.
+# Only rotate on 429 (rate limit) OR on 403 whose body is an HTML block page
+# (Cloudflare 1010 "Blocked"). A 403 with a JSON body is a real API rejection
+# and is returned as-is. Direct retried after a transient block usually clears.
 PROXY_RETRY_STATUSES = {429}
+RETRY_HTML_403 = True
 DIRECT_ORDER = "direct-first"
 
 # ---- IPVanish SOCKS5 proxies (server, port, user, pass) ----
