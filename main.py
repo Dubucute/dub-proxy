@@ -54,18 +54,14 @@ def make_client(base_url: str, kwargs: dict) -> OpenAI:
     http_client = None
     if "proxy" in kwargs:
         import httpx
-        http_client = httpx.Client(
-            proxy=kwargs["proxy"],
-            limit=httpx.Limits(max_keepalive_connections=5, max_connections=20),
-            headers={"User-Agent": UA},
-        )
+        http_client = httpx.Client(proxy=kwargs["proxy"])
     # Proxy routes get a shorter timeout so a dead proxy pool returns quickly
     # instead of hanging; direct keeps a generous timeout.
     timeout = 15.0 if http_client is not None else 120.0
     client = OpenAI(
-        api_key=UPSTREAM_API_KEY,
+        api_key=UPSTREAM_API_KEY,  # "public" — opencode.ai treats as anonymous
         base_url=base_url,
-        default_headers={"User-Agent": UA, "Authorization": f"Bearer {UPSTREAM_API_KEY}"},
+        default_headers={"User-Agent": UA},
         http_client=http_client,
         max_retries=0,  # we handle 429 rotation ourselves
         timeout=timeout,

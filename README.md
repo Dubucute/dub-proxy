@@ -25,8 +25,10 @@ Or one-click: `https://render.com/deploy?repo=https://github.com/Dubucute/dub-pr
 ## Use
 OpenAI-compatible endpoint: `https://dub-proxy.onrender.com/v1`
 - baseURL: `https://dub-proxy.onrender.com/v1`
-- apiKey: `none` (upstream is anonymous)
+- apiKey: send `none` — the proxy ignores any client key (`none`, empty, or anything).
 - model: any opencode.ai free model, e.g. `big-pickle`, `mimo-v2.5-free`, `deepseek-v4-flash-free`, `hy3-free`
+
+> **Why "none"?** opencode.ai needs NO API key — sending an invalid one (like `none`) directly gets rejected with 401. The proxy accepts any client key but talks to opencode.ai as **anonymous** internally (`Bearer public`, which opencode.ai treats as no key — verified). So just put `none` and it works; some apps require a key field, and `none` satisfies that.
 
 ### Example (OpenAI SDK / ai sdk)
 ```ts

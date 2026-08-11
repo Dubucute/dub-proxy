@@ -4,7 +4,11 @@
 import os
 
 UPSTREAM_BASE = "https://opencode.ai/zen/v1"
-# opencode.ai treats missing/bearer as anonymous. The SDK still needs a key.
+# opencode.ai free models need NO API key — sending an invalid authorization gets
+# rejected (e.g. "none" -> 401). BUT "public" is special: opencode.ai treats
+# "Authorization: Bearer public" as ANONYMOUS and returns 200 (verified live).
+# Clients may send apiKey "none" (some apps require one) — the proxy IGNORES it
+# and always uses "public" internally. No real key is ever used.
 UPSTREAM_API_KEY = "public"
 
 # Browser-ish User-Agent so Cloudflare 1010 block doesn't trip.
