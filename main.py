@@ -95,6 +95,7 @@ def route_request(payload: dict, stream: bool):
     # keys we control explicitly; everything else passes through verbatim
     passthrough = {k: v for k, v in payload.items()
                    if k not in ("model", "messages", "stream")}
+
     for label, base_url, kwargs in _routes:
         client = make_client(base_url, kwargs)
         try:
@@ -137,6 +138,28 @@ def route_request(payload: dict, stream: bool):
             continue
 
     # exhausted
+    # If last error was a Cloudflare HTML 403, wait 2s and retry direct once
+    # before giving up (transient block). Skip proxy rotation.
+    if last_err is not None and isinstance(last_err, APIStatusError):
+        if (RETRY_HTML_403 and last_err.status_code == 403 and
+                ("<html" in (last_err.response.text or "").lower() or
+                 (last_err.response.text or "").strip().startswith("<!DOCTYPE"))):
+            log.info("Cloudflare block detected, waiting 2s and retrying direct...")
+            import time as _time
+            _time.sleep(2)
+            try:
+                direct_client = make_client(UPSTREAM_BASE, {})
+                resp = direct_client.chat.completions.create(
+                    model=payload.get("model"),
+                    messages=payload.get("messages"),
+                    stream=stream,
+                    **passthrough,
+                )
+                log.info("direct retry ok")
+                return {"route": "direct-retry", "resp": resp}
+            except Exception as e2:
+                log.warning("direct retry also failed: %r", e2)
+
     if isinstance(last_err, APIStatusError):
         try:
             return {"route": _direct_lbl, "status": last_err.status_code,
