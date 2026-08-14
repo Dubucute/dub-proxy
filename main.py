@@ -12,7 +12,6 @@ Design (per user requirement):
 """
 
 import logging
-import os
 import random
 
 from fastapi import FastAPI, Request, Response
@@ -20,7 +19,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from openai import OpenAI, APIStatusError, APIConnectionError
 
 from config import (
-    UPSTREAM_BASE, UPSTREAM_API_KEY, PROXIES, UA,
+    UPSTREAM_BASE, UPSTREAM_API_KEY, PROXIES, random_ua,
     DIRECT_ORDER, PROXY_RETRY_STATUSES, RETRY_HTML_403,
 )
 
@@ -51,17 +50,32 @@ build_routes()
 
 def make_client(base_url: str, kwargs: dict) -> OpenAI:
     # Proxy (SOCKS) is plumbed through an httpx.Client, not a constructor kwarg.
-    http_client = None
+    import httpx
+
+    api_key = UPSTREAM_API_KEY  # None -> no Authorization header sent
+    http_client_kwargs: dict = {}
+    if api_key is None:
+        # Endpoint needs NO Authorization header at all. Use a dummy key (the
+        # SDK requires non-None) and strip it via an event hook.
+        def _strip_auth(request: httpx.Request) -> httpx.Request:
+            # httpx rejects setting a header to None (AttributeError), which the
+            # SDK wraps as APIConnectionError and makes every route "fail".
+            request.headers.pop("Authorization", None)
+            return request
+
+        api_key = "dummy"
+        http_client_kwargs["event_hooks"] = {"request": [_strip_auth]}
     if "proxy" in kwargs:
-        import httpx
-        http_client = httpx.Client(proxy=kwargs["proxy"])
+        http_client_kwargs["proxy"] = kwargs["proxy"]
+    http_client = httpx.Client(**http_client_kwargs)
+
     # Proxy routes get a shorter timeout so a dead proxy pool returns quickly
     # instead of hanging; direct keeps a generous timeout.
-    timeout = 15.0 if http_client is not None else 120.0
+    timeout = 15.0 if "proxy" in kwargs else 120.0
     client = OpenAI(
-        api_key=UPSTREAM_API_KEY,  # "public" — opencode.ai treats as anonymous
+        api_key=api_key,
         base_url=base_url,
-        default_headers={"User-Agent": UA},
+        default_headers={"User-Agent": random_ua()},
         http_client=http_client,
         max_retries=0,  # we handle 429 rotation ourselves
         timeout=timeout,
@@ -92,9 +106,11 @@ def models():
 
 def route_request(payload: dict, stream: bool):
     last_err = None
-    # keys we control explicitly; everything else passes through verbatim
+    # ZenLite-style client-only fields are never forwarded upstream (the
+    # OpenAI SDK would reject them as unknown kwargs and every route would
+    # "fail"); everything else passes through verbatim.
     passthrough = {k: v for k, v in payload.items()
-                   if k not in ("model", "messages", "stream")}
+                   if k not in ("model", "messages", "stream", "provider")}
 
     for label, base_url, kwargs in _routes:
         client = make_client(base_url, kwargs)

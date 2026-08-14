@@ -2,18 +2,21 @@
 # Direct connection first; rotate through IPVanish SOCKS5 on 429 only.
 
 import os
+from faker import Faker
+
+_faker = Faker()
 
 UPSTREAM_BASE = "https://opencode.ai/zen/v1"
 # opencode.ai free models need NO API key — sending an invalid authorization gets
-# rejected (e.g. "none" -> 401). BUT "public" is special: opencode.ai treats
-# "Authorization: Bearer public" as ANONYMOUS and returns 200 (verified live).
-# Clients may send apiKey "none" (some apps require one) — the proxy IGNORES it
-# and always uses "public" internally. No real key is ever used.
-UPSTREAM_API_KEY = "public"
+# rejected (e.g. "none" -> 401). The zen endpoint accepts requests with NO
+# Authorization header at all (verified live). Clients may send apiKey "none"
+# (some apps require one) — the proxy IGNORES it and sends no auth internally.
+# No real key is ever used.
+UPSTREAM_API_KEY = None  # zen endpoint needs NO auth header
 
-# Browser-ish User-Agent so Cloudflare 1010 block doesn't trip.
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+# Randomize the User-Agent per client so Cloudflare 1010 block doesn't trip
+# on repeated identical browser signatures.
+random_ua = _faker.user_agent
 
 # Only rotate on 429 (rate limit) OR on 403 whose body is an HTML block page
 # (Cloudflare 1010 "Blocked"). A 403 with a JSON body is a real API rejection

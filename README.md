@@ -1,7 +1,8 @@
 # dub-proxy
 
 Minimal OpenAI-compatible proxy to **opencode.ai** free models.
-Direct connection first; rotates through IPVanish SOCKS5 proxies **only on HTTP 429** (rate limit).
+Direct connection first; rotates through IPVanish SOCKS5 proxies on HTTP 429
+(rate limit) or a Cloudflare HTML 403 block page.
 
 No context limits. No model curation (all models pass through). No dashboard.
 
@@ -28,7 +29,7 @@ OpenAI-compatible endpoint: `https://dub-proxy.onrender.com/v1`
 - apiKey: send `none` — the proxy ignores any client key (`none`, empty, or anything).
 - model: any opencode.ai free model, e.g. `big-pickle`, `mimo-v2.5-free`, `deepseek-v4-flash-free`, `hy3-free`
 
-> **Why "none"?** opencode.ai needs NO API key — sending an invalid one (like `none`) directly gets rejected with 401. The proxy accepts any client key but talks to opencode.ai as **anonymous** internally (`Bearer public`, which opencode.ai treats as no key — verified). So just put `none` and it works; some apps require a key field, and `none` satisfies that.
+> **Why "none"?** opencode.ai needs NO API key — sending an invalid one (like `none`) directly gets rejected with 401. The proxy accepts any client key but **sends no Authorization header at all** upstream (verified live). So just put `none` and it works; some apps require a key field, and `none` satisfies that.
 
 ### Example (OpenAI SDK / ai sdk)
 ```ts
